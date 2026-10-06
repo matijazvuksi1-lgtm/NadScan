@@ -48,8 +48,9 @@ export async function onchainStep(mode:'live'|'history'|'auto'='auto'){
  for(const p of profiles.results){if(Date.now()-started>18000)break;await setting('liveVisited:'+p.id,String(Date.now()));
  const tipKey='tipCursor:'+p.id,historyKey='historyNext:'+p.id;
  if(c[tipKey]===undefined){const start=Math.max(0,head-99);c[tipKey]=String(start);c[historyKey]=String(start-1);await db().batch([db().prepare('INSERT OR IGNORE INTO settings(key,value) VALUES(?,?)').bind(tipKey,c[tipKey]),db().prepare('INSERT OR IGNORE INTO settings(key,value) VALUES(?,?)').bind(historyKey,c[historyKey]),db().prepare('INSERT OR IGNORE INTO settings(key,value) VALUES(?,?)').bind('tipStart:'+p.id,String(start))]);}
- const reverse=mode==='history'||(mode==='auto'&&Number(c[tipKey])>head),key=reverse?historyKey:tipKey;let cursor=Number(c[key]);if(!Number.isSafeInteger(cursor))throw new Error('Invalid saved scan cursor.');
+ let reverse=mode==='history'||(mode==='auto'&&Number(c[tipKey])>head),key=reverse?historyKey:tipKey;let cursor=Number(c[key]);if(!Number.isSafeInteger(cursor))throw new Error('Invalid saved scan cursor.');
  for(let batch=0;batch<Math.max(1,Math.floor(20/profiles.results.length))&&Date.now()-started<18000;batch++){
+ if(!reverse&&cursor>head&&mode==='auto'){reverse=true;key=historyKey;cursor=Number(c[key]);if(!Number.isSafeInteger(cursor))throw new Error('Invalid saved history cursor.');}
  if(reverse?cursor<0:cursor>head)break;
  const size=scanRange(c),from=reverse?Math.max(0,cursor-size+1):cursor,to=reverse?cursor:Math.min(head,cursor+size-1);
  let logs:any[];try{const filter={fromBlock:hex(from),toBlock:hex(to)};const lists=await Promise.all([rpc('eth_getLogs',[{...filter,topics:[TRANSFER,null,topic(p.wallet)]}],c),rpc('eth_getLogs',[{...filter,topics:[TRANSFER,topic(p.wallet)]}],c)]);logs=lists.flat();}catch(e){const m=e instanceof Error?e.message:String(e);const limit=m.match(/up to (?:a )?(\d+) block range/i);if(limit)await setting('rpcMaxLogRange',limit[1]);throw e;}
