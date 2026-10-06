@@ -2,7 +2,7 @@ services:
   - type: web
     name: nadscan-indexer
     runtime: node
-    plan: starter
+    plan: free
     region: frankfurt
     buildCommand: npm install && npm run build
     startCommand: npm start
@@ -23,10 +23,9 @@ services:
 
 databases:
   - name: nadscan-indexer-db
-    plan: basic-256mb
+    plan: free
     region: frankfurt
     databaseName: nadscan
     user: nadscan
     postgresMajorVersion: '17'
-    diskSizeGB: 1
     ipAllowList: []
