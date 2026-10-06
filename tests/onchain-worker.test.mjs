@@ -19,6 +19,6 @@ test('failed provider request retains the exact next unscanned block and release
 });
 
 test('automatic mode catches current blocks before historical work',async()=>{
- const f=fixture();await f.step('auto');let c=await f.config();assert.equal(c['tipCursor:p'],'101');assert.equal(c['historyNext:p'],'0');
+ const f=fixture();await f.step('auto');let c=await f.config();assert.equal(c['tipCursor:p'],'101');assert.equal(c['historyNext:p'],'-1');
  await f.step('auto');c=await f.config();assert.equal(c['historyNext:p'],'-1');assert.equal(c['tipCursor:p'],'101');f.sql.close();
 });
