@@ -4,7 +4,7 @@ An independent Monad mainnet worker and authenticated data API. It runs scan ste
 
 ## Current status
 
-Source is prepared; the service is **not deployed**. Render rejected database creation because billing information is missing. The private Sites dashboard still uses its existing indexer. Connecting it to this service and migrating its saved history remain deployment steps, not completed work.
+Source is prepared; the service is **not deployed**. A free Render PostgreSQL database was created on 2026-10-06. The dashboard still uses its existing indexer. Database connection setup, service deployment, existing-history migration and dashboard integration remain pending.
 
 ## Features
 
@@ -18,7 +18,7 @@ Source is prepared; the service is **not deployed**. Render rejected database cr
 
 ## Deployment
 
-Use `render.yaml` in the Frankfurt workspace. The selected always-on web service and small PostgreSQL instance cost approximately $13/month before storage, traffic and taxes. Render requires a payment method. Do not use a sleeping free web service for continuous indexing.
+Use `render.yaml` in the Frankfurt workspace. The configuration now selects only Free resources at the owner's request. Free web services sleep after 15 minutes without inbound traffic and are not guaranteed continuous indexers. Free PostgreSQL expires after 30 days; upgrade or export before expiration. No paid upgrade is authorized by this configuration.
 
 Required environment variables:
 
