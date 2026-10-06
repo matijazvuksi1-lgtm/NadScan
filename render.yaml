@@ -1,0 +1,32 @@
+services:
+  - type: web
+    name: nadscan-indexer
+    runtime: node
+    plan: starter
+    region: frankfurt
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_VERSION
+        value: 22.16.0
+      - key: DATABASE_URL
+        fromDatabase:
+          name: nadscan-indexer-db
+          property: connectionString
+      - key: INDEXER_API_KEY
+        generateValue: true
+      - key: MONAD_RPC_URL
+        sync: false
+      - key: INITIAL_PROFILES
+        sync: false
+
+databases:
+  - name: nadscan-indexer-db
+    plan: basic-256mb
+    region: frankfurt
+    databaseName: nadscan
+    user: nadscan
+    postgresMajorVersion: '17'
+    diskSizeGB: 1
+    ipAllowList: []
