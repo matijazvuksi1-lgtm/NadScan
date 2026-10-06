@@ -30,6 +30,17 @@ const server=createServer(async(req,res)=>{
  else if(req.method==='POST'&&url.pathname==='/api/profiles'){
  let raw='';for await(const part of req){raw+=part.toString();if(Buffer.byteLength(raw)>262144)throw new Error('Request too large');}
  await saveProfiles(JSON.parse(raw).profiles);response=Response.json({ok:true});
+ }else if(req.method==='POST'&&url.pathname==='/api/backfill'){
+ let raw='';for await(const part of req){raw+=part.toString();if(Buffer.byteLength(raw)>262144)throw new Error('Request too large');}
+ const transactions=JSON.parse(raw).transactions;
+ if(!Array.isArray(transactions)||transactions.length>100)throw new Error('Invalid backfill batch.');
+ const profiles=await pool.query('SELECT wallet FROM profiles WHERE active=1');const wallets=new Set(profiles.rows.map(p=>p.wallet));
+ const statements=[];
+ for(const t of transactions){
+ if(!wallets.has(t.wallet)||!/^0x[0-9a-fA-F]{64}$/.test(t.tx)||!Number.isSafeInteger(t.block)||t.block<0)throw new Error('Invalid backfill transaction.');
+ statements.push(db().prepare('INSERT OR IGNORE INTO chain_jobs(id,wallet,tx,block) VALUES(?,?,?,?)').bind(t.wallet+':'+t.tx,t.wallet,t.tx,t.block));
+ }
+ await db().batch(statements);response=Response.json({ok:true,queued:transactions.length});
  }else if(req.method==='GET'&&url.pathname==='/api/status'){
  const c=await config();response=Response.json({connected:!c.liveError&&Number(c.liveLastRun)>Date.now()/1000-90,chainId:143,block:Number(c.liveObservedHead)||null,background:true,lastRun:Number(c.liveLastRun)||null});
  }else{res.writeHead(404);res.end('Not found');return;}
