@@ -50,8 +50,8 @@ export async function onchainStep(mode:'live'|'history'|'auto'='auto'){
  const jobs=await db().prepare("SELECT j.* FROM chain_jobs j JOIN profiles p ON p.wallet=j.wallet WHERE p.active=1 AND j.status='pending' ORDER BY j.updated,j.block DESC LIMIT 6").all<any>();
  for(const job of jobs.results){if(Date.now()-started>deadline)break;try{const result=await processReceipt(job,c,head);await db().prepare('UPDATE chain_jobs SET status=?,message=?,updated=? WHERE id=?').bind(result.status,result.message,now,job.id).run();processed++;if(result.status==='imported'&&!('existing' in result))imported++;}catch(e){await db().prepare('UPDATE chain_jobs SET message=?,updated=? WHERE id=?').bind(e instanceof Error?e.message:'Receipt import failed',now,job.id).run();throw e;}}
  };
- const discoveryProfiles=await db().prepare('SELECT id,wallet FROM profiles WHERE active=1 ORDER BY updated,id').all<any>();
- for(const p of discoveryProfiles.results){if(Date.now()-started>5000)break;await discoverTransfers(p,head,c);}
+ const discoveryProfiles=await db().prepare('SELECT id,wallet FROM profiles WHERE active=1 ORDER BY COALESCE((SELECT CAST(value AS INTEGER) FROM settings WHERE key='discoveryVisited:'||profiles.id),0),id').all<any>();
+ for(const p of discoveryProfiles.results){if(Date.now()-started>5000)break;await setting('discoveryVisited:'+p.id,String(Date.now()));await discoverTransfers(p,head,c);}
  await drain(10000);
  const profiles=await db().prepare("SELECT id,wallet FROM profiles WHERE active=1 ORDER BY COALESCE((SELECT CAST(value AS INTEGER) FROM settings WHERE key='liveVisited:'||profiles.id),0),id").all<any>();
  for(const p of profiles.results){if(Date.now()-started>18000)break;await setting('liveVisited:'+p.id,String(Date.now()));
