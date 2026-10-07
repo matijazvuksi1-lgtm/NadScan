@@ -1,3 +1,4 @@
+import {discoverTransfers} from './transfer-history';
 import {db,config,setting} from './store';
 import {rpc} from './indexer';
 import {scanRange} from './scan-policy';
@@ -7,6 +8,12 @@ import {protocolQuote} from './chain-events';
 const hex=(n:number)=>'0x'+n.toString(16);
 async function processReceipt(job:any,c:Record<string,string>,safeHead:number){
  const receipt=await rpc('eth_getTransactionReceipt',[job.tx],c);if(!receipt)throw new Error('Receipt unavailable');if(receipt.status!=='0x1')return {status:'ignored',message:'Transaction failed onchain.'};if(parseInt(receipt.blockNumber,16)>safeHead)throw new Error('Waiting for confirmation');
+ const transferStatements=[];
+ for(const l of receipt.logs||[]){if(l.topics?.[0]!==TRANSFER||l.topics.length!==3||!/^0x[0-9a-f]{64}$/i.test(l.data))continue;
+ const source='0x'+l.topics[1].slice(-40).toLowerCase(),dest='0x'+l.topics[2].slice(-40).toLowerCase();if(source===dest||source!==job.wallet&&dest!==job.wallet||l.address.toLowerCase()===WMON)continue;
+ transferStatements.push(db().prepare('INSERT OR IGNORE INTO transfers(id,wallet,token,direction,quantity,block,tx) VALUES(?,?,?,?,?,?,?)').bind(job.wallet+':'+job.tx+':'+l.logIndex,job.wallet,l.address.toLowerCase(),dest===job.wallet?'in':'out',BigInt(l.data).toString(),parseInt(receipt.blockNumber,16),job.tx));
+ }
+ if(transferStatements.length)await db().batch(transferStatements);
  const already=await db().prepare('SELECT id FROM trades WHERE wallet=? AND tx=? LIMIT 1').bind(job.wallet,job.tx).first();if(already)return {status:'imported',message:'Receipt already indexed.',existing:true};
  const flows=tokenFlows(receipt.logs,job.wallet);const assets=[...flows.entries()].filter(([a,n])=>a!==WMON&&n!==0n);
  if(assets.length!==1)return {status:'review',message:'Multiple or no token flows; not classified as a simple swap.'};
@@ -43,7 +50,9 @@ export async function onchainStep(mode:'live'|'history'|'auto'='auto'){
  const jobs=await db().prepare("SELECT j.* FROM chain_jobs j JOIN profiles p ON p.wallet=j.wallet WHERE p.active=1 AND j.status='pending' ORDER BY j.updated,j.block DESC LIMIT 6").all<any>();
  for(const job of jobs.results){if(Date.now()-started>deadline)break;try{const result=await processReceipt(job,c,head);await db().prepare('UPDATE chain_jobs SET status=?,message=?,updated=? WHERE id=?').bind(result.status,result.message,now,job.id).run();processed++;if(result.status==='imported'&&!('existing' in result))imported++;}catch(e){await db().prepare('UPDATE chain_jobs SET message=?,updated=? WHERE id=?').bind(e instanceof Error?e.message:'Receipt import failed',now,job.id).run();throw e;}}
  };
- await drain(7000);
+ const discoveryProfiles=await db().prepare('SELECT id,wallet FROM profiles WHERE active=1 ORDER BY updated,id').all<any>();
+ for(const p of discoveryProfiles.results){if(Date.now()-started>5000)break;await discoverTransfers(p,head,c);}
+ await drain(10000);
  const profiles=await db().prepare("SELECT id,wallet FROM profiles WHERE active=1 ORDER BY COALESCE((SELECT CAST(value AS INTEGER) FROM settings WHERE key='liveVisited:'||profiles.id),0),id").all<any>();
  for(const p of profiles.results){if(Date.now()-started>18000)break;await setting('liveVisited:'+p.id,String(Date.now()));
  const tipKey='tipCursor:'+p.id,historyKey='historyNext:'+p.id;
